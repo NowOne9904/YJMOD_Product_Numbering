@@ -192,11 +192,18 @@ export default function Home() {
               setSyncProgress(Math.round((currentStep / totalSteps) * 100));
             }
           }
-          setSyncStatusText("동기화 완료");
-          setSyncProgress(100);
           await fetchProducts();
-        } catch (e: any) { alert(`Error: ${e.message}`); }
-        finally { setTimeout(() => { setIsSyncing(false); setSyncProgress(0); }, 1500); }
+          setSyncStatusText("데이터 갱신 중...");
+          setSyncProgress(100);
+        } catch (e: any) {
+          console.error('[handleSync] 동기화 중 에러 발생:', e);
+          alert(`동기화 중 오류가 발생했습니다: ${e.message}`);
+        } finally {
+          setTimeout(() => {
+            setIsSyncing(false);
+            setSyncProgress(0);
+          }, 1000);
+        }
       }
     });
   };
@@ -329,11 +336,11 @@ export default function Home() {
       )}
 
       {/* Top Header */}
-      <header className="flex items-center justify-between px-6 lg:px-10 py-3 bg-white dark:bg-[#0B1221] border-b border-slate-200 dark:border-white/5 z-50 shrink-0">
-        <div className="flex items-center gap-6">
+      <header className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between px-4 lg:px-10 py-3 bg-white dark:bg-[#0B1221] border-b border-slate-200 dark:border-white/5 z-50 shrink-0 gap-3">
+        <div className="flex items-center justify-between lg:justify-start gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-xl flex items-center justify-center font-black text-base shadow-lg">Y</div>
-            <h1 className="text-sm lg:text-base font-black tracking-tighter dark:text-white">영재컴퓨터 넘버링</h1>
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-xl flex items-center justify-center font-black text-base shadow-lg shrink-0">Y</div>
+            <h1 className="text-sm lg:text-base font-black tracking-tighter dark:text-white truncate">영재컴퓨터 넘버링</h1>
           </div>
 
           <div className="flex items-center gap-2">
@@ -346,15 +353,15 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative group hidden lg:block min-w-[240px]">
+        <div className="flex items-center gap-3 flex-1 lg:flex-none">
+          <div className="relative group flex-1 min-w-0 lg:min-w-[240px]">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 group-focus-within:text-blue-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="제품 코드, URL 검색..."
-              className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg py-1.5 pl-9 pr-4 text-[11px] font-bold focus:ring-2 focus:ring-blue-500/10 transition-all"
+              placeholder="코드, URL 검색..."
+              className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg py-1.5 pl-9 pr-4 text-[11px] font-bold focus:ring-2 focus:ring-blue-500/10 transition-all outline-none"
             />
           </div>
 
@@ -463,7 +470,7 @@ export default function Home() {
                         {/* 제품 넘버 */}
                         <div className="flex-1 xl:flex-none flex items-center justify-between xl:justify-center min-w-0 pr-2 xl:pr-0">
                           <div onClick={() => handleCopy(p.full_code, codeKey)} className="inline-flex items-center gap-3 cursor-pointer group/num relative min-w-0">
-                            <span className="text-xl lg:text-2xl font-black tracking-tight dark:text-white group-hover:text-blue-500 transition-colors leading-none truncate font-mono">
+                            <span className="text-xl lg:text-2xl font-bold dark:text-white group-hover:text-blue-500 transition-colors inline-block py-1" style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
                               {p.full_code}
                             </span>
                             <div className={`p-1 rounded-md transition-all shrink-0 ${copyStatus[codeKey] ? 'bg-blue-600 text-white' : 'opacity-0 group-hover/num:opacity-100 text-slate-400 bg-slate-100 dark:bg-white/5'}`}>
@@ -608,7 +615,7 @@ export default function Home() {
                         <button onClick={() => setIsVariation(false)} className={`flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all ${!isVariation ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-400'}`}>자동 순번 생성</button>
                         <button onClick={() => setIsVariation(true)} className={`flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all ${isVariation ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-400'}`}>수동 번호 입력</button>
                       </div>
-                      {isVariation && (
+                      {isVariation ? (
                         <div className="space-y-4 animate-in slide-in-from-top-1">
                           <div className="grid grid-cols-2 gap-3 mt-3">
                             <div className="space-y-1.5">
@@ -623,52 +630,53 @@ export default function Home() {
                           {variationBaseNum && (
                             <div className="p-4 bg-blue-600/5 border border-dashed border-blue-600/20 rounded-2xl text-center flex flex-col items-center gap-1.5">
                               <span className="text-[8px] font-black text-blue-500/60 uppercase tracking-widest">수동 발급 예정 코드</span>
-                              <span className="text-xl font-black text-slate-900 dark:text-white tracking-tighter">
+                              <span className="text-xl font-bold text-slate-900 dark:text-white inline-block py-1" style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
                                 {`${newCategory}${variationBaseNum}${variationSuffix}`.toUpperCase()}
                               </span>
                             </div>
                           )}
                         </div>
-                      )}
-                      {!isVariation && (
+                      ) : (
                         <div className="p-6 bg-slate-50 dark:bg-white/[0.02] border border-dashed border-white/10 rounded-2xl text-center flex flex-col items-center gap-2 mt-3 animate-in fade-in zoom-in-95 duration-300">
                           <p className="text-[9px] font-bold text-slate-500 italic uppercase tracking-wider">시스템 자동 채번 예약됨</p>
                           <div className="flex flex-col items-center">
                             <span className="text-[8px] font-black text-blue-500/60 uppercase tracking-widest mb-0.5">발급 예정 코드</span>
-                            <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">{nextAutoCode}</span>
+                            <span className="text-2xl font-bold text-slate-900 dark:text-white inline-block py-1" style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
+                              {nextAutoCode}
+                            </span>
                           </div>
                         </div>
                       )}
+
+                      <div className="space-y-3 mt-4">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">URL 연동 정보 (필수)</label>
+                        <div className="flex gap-2.5">
+                          <input
+                            type="url"
+                            value={editingId ? currentEditUrl : currentNewUrl}
+                            onChange={e => editingId ? setCurrentEditUrl(e.target.value) : setCurrentNewUrl(e.target.value)}
+                            placeholder="자사몰 아이템 링크 입력..."
+                            className="flex-1 bg-slate-50 dark:bg-black border border-white/5 rounded-xl px-4 py-3 text-[11px] font-bold dark:text-white outline-none focus:ring-1 focus:ring-blue-600/40"
+                          />
+                          <button onClick={() => {
+                            const val = (editingId ? currentEditUrl : currentNewUrl).trim();
+                            if (val) {
+                              if (editingId) { setEditUrls([...editUrls, val]); setCurrentEditUrl(""); }
+                              else { setNewUrls([...newUrls, val]); setCurrentNewUrl(""); }
+                            }
+                          }} className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 shadow-lg active:scale-95"><Plus className="w-4 h-4" /></button>
+                        </div>
+                        <div className="max-h-36 overflow-y-auto space-y-2 custom-scrollbar pr-1 mt-1">
+                          {(editingId ? editUrls : newUrls).map((u, i) => (
+                            <div key={i} className="flex items-center gap-3 bg-white dark:bg-white/[0.03] p-2.5 px-4 rounded-xl border border-white/5 shadow-sm group">
+                              <span className="text-[9px] font-bold text-slate-500 truncate flex-1 font-mono">{u}</span>
+                              <button onClick={() => editingId ? setEditUrls(editUrls.filter((_, idx) => idx !== i)) : setNewUrls(newUrls.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600 p-1 opacity-20 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
-
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">URL 연동 정보 (필수)</label>
-                    <div className="flex gap-2.5">
-                      <input
-                        type="url"
-                        value={editingId ? currentEditUrl : currentNewUrl}
-                        onChange={e => editingId ? setCurrentEditUrl(e.target.value) : setCurrentNewUrl(e.target.value)}
-                        placeholder="자사몰 아이템 링크 입력..."
-                        className="flex-1 bg-slate-50 dark:bg-black border border-white/5 rounded-xl px-4 py-3 text-[11px] font-bold dark:text-white outline-none focus:ring-1 focus:ring-blue-600/40"
-                      />
-                      <button onClick={() => {
-                        const val = (editingId ? currentEditUrl : currentNewUrl).trim();
-                        if (val) {
-                          if (editingId) { setEditUrls([...editUrls, val]); setCurrentEditUrl(""); }
-                          else { setNewUrls([...newUrls, val]); setCurrentNewUrl(""); }
-                        }
-                      }} className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 shadow-lg active:scale-95"><Plus className="w-4 h-4" /></button>
-                    </div>
-                    <div className="max-h-36 overflow-y-auto space-y-2 custom-scrollbar pr-1 mt-1">
-                      {(editingId ? editUrls : newUrls).map((u, i) => (
-                        <div key={i} className="flex items-center gap-3 bg-white dark:bg-white/[0.03] p-2.5 px-4 rounded-xl border border-white/5 shadow-sm group">
-                          <span className="text-[9px] font-bold text-slate-500 truncate flex-1 font-mono">{u}</span>
-                          <button onClick={() => editingId ? setEditUrls(editUrls.filter((_, idx) => idx !== i)) : setNewUrls(newUrls.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600 p-1 opacity-20 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
