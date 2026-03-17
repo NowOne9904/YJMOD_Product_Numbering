@@ -272,8 +272,17 @@ export default function Home() {
     let result = products;
     if (selectedCategory !== "ALL") result = result.filter(p => p.category === selectedCategory);
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(p => p.full_code.toLowerCase().includes(q) || (p.product_url && p.product_url.toLowerCase().includes(q)));
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(p => {
+        // 1. 제품 코드 매칭 (가장 높은 우선순위)
+        const codeMatch = p.full_code.toLowerCase().includes(q);
+
+        // 2. URL 매칭 (URL은 최소 7글자 이상 입력했을 때만 검색 대상으로 포함하여 숫자 오탐지 방지)
+        // (예: 184 검색 시 it_id 끝자리가 184인 GY100이 잡히는 현상 방지)
+        const urlMatch = q.length > 6 && p.product_url && p.product_url.toLowerCase().includes(q);
+
+        return codeMatch || urlMatch;
+      });
     }
     return result;
   }, [products, selectedCategory, searchQuery]);
