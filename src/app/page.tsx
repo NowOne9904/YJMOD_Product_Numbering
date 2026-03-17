@@ -464,12 +464,7 @@ export default function Home() {
                         <div className="flex-1 xl:flex-none flex items-center justify-between xl:justify-center min-w-0 pr-2 xl:pr-0">
                           <div onClick={() => handleCopy(p.full_code, codeKey)} className="inline-flex items-center gap-3 cursor-pointer group/num relative min-w-0">
                             <span className="text-xl lg:text-2xl font-black tracking-tight dark:text-white group-hover:text-blue-500 transition-colors leading-none truncate font-mono">
-                              {p.full_code.split('_').map((part, i) => (
-                                <span key={i}>
-                                  {part}
-                                  {i < p.full_code.split('_').length - 1 && <span className="text-blue-500 mx-0.5">_</span>}
-                                </span>
-                              ))}
+                              {p.full_code}
                             </span>
                             <div className={`p-1 rounded-md transition-all shrink-0 ${copyStatus[codeKey] ? 'bg-blue-600 text-white' : 'opacity-0 group-hover/num:opacity-100 text-slate-400 bg-slate-100 dark:bg-white/5'}`}>
                               {copyStatus[codeKey] ? <Check className="w-2.5 h-2.5" /> : <Copy className="w-2.5 h-2.5" />}
