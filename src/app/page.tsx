@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { supabase } from "@/utils/supabase";
 import {
   Plus,
@@ -30,7 +30,8 @@ import {
   Link2,
   Maximize2,
   LayoutGrid,
-  ChevronDown
+  ChevronDown,
+  History
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -50,6 +51,74 @@ const CATEGORIES = [
   { code: "OY", name: "사무용", color: "bg-teal-500/10 text-teal-500 border-teal-500/20" },
   { code: "HY", name: "하이엔드", color: "bg-orange-500/10 text-orange-500 border-orange-500/20" },
 ];
+
+const SLIDE_THUMB = 52;
+
+function SlideToConfirmButton({ onConfirm, label = "밀어서 진행하기" }: { onConfirm: () => void; label?: string }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [completed, setCompleted] = useState(false);
+
+  const getMaxX = () => {
+    const track = trackRef.current;
+    return track ? track.clientWidth - SLIDE_THUMB : 0;
+  };
+
+  const handlePointerDown = (e: ReactPointerEvent) => {
+    if (completed) return;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    setDragging(true);
+  };
+
+  const handlePointerMove = (e: ReactPointerEvent) => {
+    if (!dragging || completed) return;
+    const track = trackRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
+    const maxX = getMaxX();
+    const x = Math.max(0, Math.min(e.clientX - rect.left - SLIDE_THUMB / 2, maxX));
+    setDragX(x);
+    if (maxX > 0 && x >= maxX * 0.94) {
+      setCompleted(true);
+      setDragging(false);
+      onConfirm();
+    }
+  };
+
+  const handlePointerUp = () => {
+    if (!dragging) return;
+    setDragging(false);
+    if (!completed) setDragX(0);
+  };
+
+  const maxX = getMaxX();
+  const progress = maxX > 0 ? dragX / maxX : 0;
+
+  return (
+    <div
+      ref={trackRef}
+      className="relative w-full h-14 bg-slate-100 dark:bg-black rounded-2xl overflow-hidden select-none border border-white/5 touch-none"
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      <div className="absolute inset-y-0 left-0 bg-red-600/20" style={{ width: `${dragX + SLIDE_THUMB}px` }} />
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400" style={{ opacity: completed ? 1 : Math.max(0, 1 - progress * 1.6) }}>
+          {completed ? "진행 중..." : label}
+        </span>
+      </div>
+      <div
+        onPointerDown={handlePointerDown}
+        className={`absolute top-1 left-1 h-12 w-12 rounded-xl flex items-center justify-center shadow-lg cursor-grab active:cursor-grabbing ${completed ? "bg-emerald-600" : "bg-red-600"}`}
+        style={{ transform: `translateX(${dragX}px)`, transition: dragging ? "none" : "transform 0.3s ease" }}
+      >
+        {completed ? <Check className="w-5 h-5 text-white" /> : <ChevronRight className="w-5 h-5 text-white" />}
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const { theme, setTheme } = useTheme();
@@ -84,14 +153,18 @@ export default function Home() {
   const [isCancellingSync, setIsCancellingSync] = useState(false);
   const syncClientIdRef = useRef(Math.random().toString(36).slice(2, 10));
 
+  const [syncLogs, setSyncLogs] = useState<any[]>([]);
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void; type: 'default' | 'danger' }>({
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void; type: 'default' | 'danger'; requireSlide?: boolean }>({
     open: false,
     title: "",
     message: "",
     onConfirm: () => { },
-    type: 'default'
+    type: 'default',
+    requireSlide: false
   });
 
   useEffect(() => {
@@ -155,10 +228,20 @@ export default function Home() {
     setLoading(false);
   }, [sortBy, sortOrder]);
 
+  const fetchSyncLogs = useCallback(async () => {
+    const { data } = await supabase
+      .from("sync_logs")
+      .select("*")
+      .order("finished_at", { ascending: false })
+      .limit(20);
+    setSyncLogs(data || []);
+  }, []);
+
   useEffect(() => {
     setMounted(true);
     fetchProducts();
-  }, [fetchProducts]);
+    fetchSyncLogs();
+  }, [fetchProducts, fetchSyncLogs]);
 
   const handleSync = async (isFullReset: boolean = false) => {
     if (isSyncing) return;
@@ -167,6 +250,7 @@ export default function Home() {
       title: isFullReset ? "전체 데이터 미러링" : "실시간 단축 스캔",
       message: isFullReset ? "DB를 자사몰과 완전히 대조하여 최신화합니다. 기존 데이터가 유실되거나 복구될 수 있습니다." : "기존 정보를 유지한 채 신규 상품 정보만 빠르게 수집합니다.",
       type: isFullReset ? 'danger' : 'default',
+      requireSlide: isFullReset,
       onConfirm: async () => {
         setConfirmDialog(p => ({ ...p, open: false }));
 
@@ -192,6 +276,8 @@ export default function Home() {
         setSyncEtaSeconds(null);
         setSyncStatusText("준비 중...");
         const startTime = Date.now();
+        let totalFoundLocal = 0;
+        let hadError = false;
         try {
           if (isFullReset) {
             await fetch("/api/reset-db", { method: "POST" });
@@ -228,6 +314,7 @@ export default function Home() {
                 if (res.ok) {
                   const result = await res.json();
                   if (result.success) {
+                    totalFoundLocal += (result.count || 0);
                     setSyncTotalFound(prev => prev + (result.count || 0));
                     if (!sharedCookies && result.cookies) sharedCookies = result.cookies;
                   }
@@ -255,10 +342,25 @@ export default function Home() {
             setSyncProgress(100);
           }
         } catch (e: any) {
+          hadError = true;
           console.error('[handleSync] 동기화 중 에러 발생:', e);
           alert(`동기화 중 오류가 발생했습니다: ${e.message}`);
         } finally {
           await supabase.rpc('release_sync_lock');
+          try {
+            await fetch("/api/sync-log", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: isFullReset ? "full_mirror" : "short_scan",
+                status: hadError ? "error" : syncCancelRef.current ? "cancelled" : "completed",
+                items_found: totalFoundLocal,
+                triggered_by: syncClientIdRef.current,
+                started_at: new Date(startTime).toISOString()
+              })
+            });
+          } catch (e) { }
+          fetchSyncLogs();
           setTimeout(() => {
             setIsSyncing(false);
             setSyncProgress(0);
@@ -607,6 +709,60 @@ export default function Home() {
         </div>
       </main>
 
+      {/* Sync Log Footer */}
+      <div className="shrink-0 bg-white dark:bg-[#0B1221] border-t border-slate-200 dark:border-white/5 px-6 lg:px-10 py-2 flex items-center justify-between gap-4 text-[9px] font-black text-slate-400">
+        <div className="flex items-center gap-2 min-w-0">
+          <History className="w-3 h-3 text-blue-500 shrink-0" />
+          {syncLogs[0] ? (
+            <span className="truncate">
+              최근 동기화 {formatDate(syncLogs[0].finished_at)} · {syncLogs[0].type === "full_mirror" ? "전체 미러링" : "단축 스캔"} · {syncLogs[0].status === "completed" ? "완료" : syncLogs[0].status === "cancelled" ? "취소됨" : "오류"} · IP {syncLogs[0].ip_address || "알 수 없음"}
+            </span>
+          ) : (
+            <span>동기화 기록 없음</span>
+          )}
+        </div>
+        <button onClick={() => setIsLogModalOpen(true)} className="text-blue-500 hover:text-blue-400 shrink-0 uppercase tracking-widest">전체 로그 보기</button>
+      </div>
+
+      {/* Sync Log Modal */}
+      {isLogModalOpen && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-[#0F172A] border border-white/10 w-full max-w-2xl rounded-[2rem] shadow-4xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[80vh]">
+            <div className="px-8 py-5 border-b border-white/5 flex items-center justify-between shrink-0">
+              <h3 className="text-base font-black dark:text-white flex items-center gap-2">
+                <History className="w-4 h-4 text-blue-500" /> 최근 동기화 로그
+              </h3>
+              <button onClick={() => setIsLogModalOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-all">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto custom-scrollbar flex-1 divide-y divide-slate-100 dark:divide-white/5">
+              {syncLogs.length === 0 ? (
+                <div className="py-16 text-center text-slate-400 text-[11px] font-bold">기록이 없습니다</div>
+              ) : (
+                syncLogs.map(log => (
+                  <div key={log.id} className="px-8 py-3 flex flex-wrap items-center justify-between gap-3 text-[10px] font-bold">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-black border shrink-0 ${log.type === "full_mirror" ? "bg-red-500/10 text-red-500 border-red-500/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20"}`}>
+                        {log.type === "full_mirror" ? "전체 미러링" : "단축 스캔"}
+                      </span>
+                      <span className={`shrink-0 ${log.status === "completed" ? "text-emerald-500" : log.status === "cancelled" ? "text-amber-500" : "text-red-500"}`}>
+                        {log.status === "completed" ? "완료" : log.status === "cancelled" ? "취소됨" : "오류"}
+                      </span>
+                      <span className="text-slate-400 font-mono truncate">{log.ip_address || "알 수 없음"}</span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0 text-slate-400">
+                      <span>{log.items_found}개 수집</span>
+                      <span className="font-mono">{formatDate(log.finished_at)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Interface */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-in fade-in duration-300">
@@ -792,12 +948,19 @@ export default function Home() {
                 <p className="text-[13px] text-slate-400 font-bold leading-relaxed">{confirmDialog.message}</p>
               </div>
             </div>
-            <div className="p-8 pt-0 flex gap-3">
-              <button onClick={() => setConfirmDialog(p => ({ ...p, open: false }))} className="flex-1 py-3 bg-slate-800 text-slate-400 rounded-xl text-[10px] font-black hover:bg-slate-700">이전</button>
-              <button onClick={confirmDialog.onConfirm} className={`flex-1 py-3 text-white rounded-xl text-[10px] font-black shadow-xl ${confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'}`}>
-                확인
-              </button>
-            </div>
+            {confirmDialog.requireSlide ? (
+              <div className="p-8 pt-0 space-y-3">
+                <SlideToConfirmButton onConfirm={confirmDialog.onConfirm} label="밀어서 진행하기" />
+                <button onClick={() => setConfirmDialog(p => ({ ...p, open: false }))} className="w-full py-3 bg-slate-800 text-slate-400 rounded-xl text-[10px] font-black hover:bg-slate-700">취소</button>
+              </div>
+            ) : (
+              <div className="p-8 pt-0 flex gap-3">
+                <button onClick={() => setConfirmDialog(p => ({ ...p, open: false }))} className="flex-1 py-3 bg-slate-800 text-slate-400 rounded-xl text-[10px] font-black hover:bg-slate-700">이전</button>
+                <button onClick={confirmDialog.onConfirm} className={`flex-1 py-3 text-white rounded-xl text-[10px] font-black shadow-xl ${confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'}`}>
+                  확인
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
