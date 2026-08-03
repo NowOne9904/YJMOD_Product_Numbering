@@ -79,6 +79,7 @@ export default function Home() {
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncTotalFound, setSyncTotalFound] = useState(0);
   const [syncStatusText, setSyncStatusText] = useState("");
+  const [syncEtaSeconds, setSyncEtaSeconds] = useState<number | null>(null);
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -157,6 +158,7 @@ export default function Home() {
   }, [fetchProducts]);
 
   const handleSync = async (isFullReset: boolean = false) => {
+    if (isSyncing) return;
     setConfirmDialog({
       open: true,
       title: isFullReset ? "전체 데이터 미러링" : "실시간 단축 스캔",
@@ -167,7 +169,9 @@ export default function Home() {
         setIsSyncing(true);
         setSyncProgress(0);
         setSyncTotalFound(0);
+        setSyncEtaSeconds(null);
         setSyncStatusText("준비 중...");
+        const startTime = Date.now();
         try {
           if (isFullReset) {
             await fetch("/api/reset-db", { method: "POST" });
@@ -211,6 +215,14 @@ export default function Home() {
               } catch (e) { }
               currentStep++;
               setSyncProgress(Math.round((currentStep / totalSteps) * 100));
+
+              // 완료된 작업들의 평균 소요 시간으로 남은 시간을 추정한다 (초반 몇 건은 표본이 적어 생략).
+              if (currentStep >= 3) {
+                const elapsedMs = Date.now() - startTime;
+                const avgMsPerStep = elapsedMs / currentStep;
+                const remainingSteps = totalSteps - currentStep;
+                setSyncEtaSeconds(Math.max(0, Math.round((avgMsPerStep * remainingSteps) / 1000)));
+              }
             }
           };
 
@@ -336,32 +348,31 @@ export default function Home() {
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans selection:bg-blue-500/20 transition-colors duration-500 overflow-hidden">
 
-      {/* Sync Overlay */}
+      {/* Sync Progress Panel (비차단: 동기화 중에도 기존 데이터 열람/조작 가능) */}
       {isSyncing && (
-        <div className="fixed inset-0 z-[120] flex flex-col items-center justify-center bg-white/70 dark:bg-black/90 backdrop-blur-3xl animate-in fade-in duration-500">
-          <div className="w-full max-w-sm p-8 space-y-10">
-            <div className="flex flex-col items-center gap-6">
-              <div className="relative">
-                <div className="absolute inset-0 bg-blue-500/20 blur-[80px] animate-pulse" />
-                <div className="relative w-20 h-20 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center shadow-2xl border border-slate-100 dark:border-white/5">
-                  <Loader2 className="w-7 h-7 text-blue-500 animate-spin" />
-                </div>
-              </div>
-              <div className="text-center">
-                <h3 className="text-xl font-black">{syncProgress === 100 ? "동기화 완료" : "데이터 동기화 중"}</h3>
-                <p className="text-[10px] font-black text-blue-500/80 tracking-widest uppercase mt-2">{syncStatusText}</p>
+        <div className="fixed bottom-5 right-5 z-[120] w-[300px] p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="relative shrink-0">
+              <div className="absolute inset-0 bg-blue-500/20 blur-[20px] animate-pulse" />
+              <div className="relative w-9 h-9 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/20">
+                <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
               </div>
             </div>
-            <div className="space-y-4">
-              <div className="h-2 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden flex p-[1px] shadow-inner">
-                <div className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full transition-all duration-700 relative" style={{ width: `${syncProgress}%` }}>
-                  <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-shimmer" />
-                </div>
+            <div className="min-w-0">
+              <h3 className="text-[11px] font-black dark:text-white truncate">{syncProgress >= 100 ? "동기화 완료" : "데이터 동기화 중"}</h3>
+              <p className="text-[9px] font-black text-blue-500/70 tracking-widest uppercase truncate">{syncStatusText}</p>
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden flex p-[1px] shadow-inner">
+              <div className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full transition-all duration-700 relative" style={{ width: `${syncProgress}%` }}>
+                <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-shimmer" />
               </div>
-              <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase">
-                <span>진행: {syncProgress}%</span>
-                <span>수집: {syncTotalFound.toLocaleString()} 개</span>
-              </div>
+            </div>
+            <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase">
+              <span>진행 {syncProgress}%</span>
+              <span>수집 {syncTotalFound.toLocaleString()}개</span>
+              <span>{syncEtaSeconds === null ? "예상 시간 계산 중" : syncEtaSeconds <= 0 ? "곧 완료" : `약 ${syncEtaSeconds}초 남음`}</span>
             </div>
           </div>
         </div>
@@ -376,10 +387,10 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={() => handleSync(false)} title="단축 스캔" className="group p-2 bg-blue-600/10 hover:bg-blue-600 text-blue-600 hover:text-white rounded-lg transition-all active:scale-95 border border-blue-600/10">
-              <RefreshCw className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-500" />
+            <button onClick={() => handleSync(false)} disabled={isSyncing} title="단축 스캔" className="group p-2 bg-blue-600/10 hover:bg-blue-600 text-blue-600 hover:text-white rounded-lg transition-all active:scale-95 border border-blue-600/10 disabled:opacity-30 disabled:pointer-events-none">
+              <RefreshCw className={`w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-500 ${isSyncing ? "animate-spin" : ""}`} />
             </button>
-            <button onClick={() => handleSync(true)} title="전체 데이터 미러링" className="p-2 bg-red-600/5 hover:bg-red-600 text-red-600/50 hover:text-white rounded-lg transition-all border border-transparent hover:border-red-600/20">
+            <button onClick={() => handleSync(true)} disabled={isSyncing} title="전체 데이터 미러링" className="p-2 bg-red-600/5 hover:bg-red-600 text-red-600/50 hover:text-white rounded-lg transition-all border border-transparent hover:border-red-600/20 disabled:opacity-30 disabled:pointer-events-none">
               <AlertCircle className="w-3.5 h-3.5" />
             </button>
           </div>
