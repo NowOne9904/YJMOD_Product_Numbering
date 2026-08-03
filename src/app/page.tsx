@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/utils/supabase";
 import {
   Plus,
@@ -80,6 +80,8 @@ export default function Home() {
   const [syncTotalFound, setSyncTotalFound] = useState(0);
   const [syncStatusText, setSyncStatusText] = useState("");
   const [syncEtaSeconds, setSyncEtaSeconds] = useState<number | null>(null);
+  const syncCancelRef = useRef(false);
+  const [isCancellingSync, setIsCancellingSync] = useState(false);
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -167,6 +169,8 @@ export default function Home() {
       onConfirm: async () => {
         setConfirmDialog(p => ({ ...p, open: false }));
         setIsSyncing(true);
+        setIsCancellingSync(false);
+        syncCancelRef.current = false;
         setSyncProgress(0);
         setSyncTotalFound(0);
         setSyncEtaSeconds(null);
@@ -196,7 +200,7 @@ export default function Home() {
           let jobIndex = 0;
 
           const worker = async () => {
-            while (jobIndex < jobs.length) {
+            while (jobIndex < jobs.length && !syncCancelRef.current) {
               const job = jobs[jobIndex++];
               setSyncStatusText(`${job.cat} 자료 대조 중...`);
               try {
@@ -228,8 +232,12 @@ export default function Home() {
 
           await Promise.all(Array.from({ length: CONCURRENCY }, worker));
           await fetchProducts();
-          setSyncStatusText("데이터 갱신 중...");
-          setSyncProgress(100);
+          if (syncCancelRef.current) {
+            setSyncStatusText("동기화가 취소되었습니다");
+          } else {
+            setSyncStatusText("데이터 갱신 중...");
+            setSyncProgress(100);
+          }
         } catch (e: any) {
           console.error('[handleSync] 동기화 중 에러 발생:', e);
           alert(`동기화 중 오류가 발생했습니다: ${e.message}`);
@@ -381,6 +389,15 @@ export default function Home() {
               <span>수집 {syncTotalFound.toLocaleString()}개</span>
               <span>{syncEtaSeconds === null ? "예상 시간 계산 중" : syncEtaSeconds <= 0 ? "곧 완료" : `약 ${formatEta(syncEtaSeconds)} 남음`}</span>
             </div>
+            {syncProgress < 100 && (
+              <button
+                onClick={() => { syncCancelRef.current = true; setIsCancellingSync(true); setSyncStatusText("취소 중..."); }}
+                disabled={isCancellingSync}
+                className="w-full py-2 mt-1 bg-slate-100 dark:bg-white/5 hover:bg-red-600 hover:text-white text-slate-400 rounded-lg text-[10px] font-black transition-all disabled:opacity-40 disabled:pointer-events-none"
+              >
+                {isCancellingSync ? "취소 중..." : "동기화 취소"}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -697,36 +714,36 @@ export default function Home() {
                           </div>
                         </div>
                       )}
-
-                      <div className="space-y-3 mt-4">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">URL 연동 정보 (필수)</label>
-                        <div className="flex gap-2.5">
-                          <input
-                            type="url"
-                            value={editingId ? currentEditUrl : currentNewUrl}
-                            onChange={e => editingId ? setCurrentEditUrl(e.target.value) : setCurrentNewUrl(e.target.value)}
-                            placeholder="자사몰 아이템 링크 입력..."
-                            className="flex-1 bg-slate-50 dark:bg-black border border-white/5 rounded-xl px-4 py-3 text-[11px] font-bold dark:text-white outline-none focus:ring-1 focus:ring-blue-600/40"
-                          />
-                          <button onClick={() => {
-                            const val = (editingId ? currentEditUrl : currentNewUrl).trim();
-                            if (val) {
-                              if (editingId) { setEditUrls([...editUrls, val]); setCurrentEditUrl(""); }
-                              else { setNewUrls([...newUrls, val]); setCurrentNewUrl(""); }
-                            }
-                          }} className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 shadow-lg active:scale-95"><Plus className="w-4 h-4" /></button>
-                        </div>
-                        <div className="max-h-36 overflow-y-auto space-y-2 custom-scrollbar pr-1 mt-1">
-                          {(editingId ? editUrls : newUrls).map((u, i) => (
-                            <div key={i} className="flex items-center gap-3 bg-white dark:bg-white/[0.03] p-2.5 px-4 rounded-xl border border-white/5 shadow-sm group">
-                              <span className="text-[9px] font-bold text-slate-500 truncate flex-1 font-mono">{u}</span>
-                              <button onClick={() => editingId ? setEditUrls(editUrls.filter((_, idx) => idx !== i)) : setNewUrls(newUrls.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600 p-1 opacity-20 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
                     </div>
                   )}
+
+                  <div className="space-y-3 mt-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">URL 연동 정보 (필수)</label>
+                    <div className="flex gap-2.5">
+                      <input
+                        type="url"
+                        value={editingId ? currentEditUrl : currentNewUrl}
+                        onChange={e => editingId ? setCurrentEditUrl(e.target.value) : setCurrentNewUrl(e.target.value)}
+                        placeholder="자사몰 아이템 링크 입력..."
+                        className="flex-1 bg-slate-50 dark:bg-black border border-white/5 rounded-xl px-4 py-3 text-[11px] font-bold dark:text-white outline-none focus:ring-1 focus:ring-blue-600/40"
+                      />
+                      <button onClick={() => {
+                        const val = (editingId ? currentEditUrl : currentNewUrl).trim();
+                        if (val) {
+                          if (editingId) { setEditUrls([...editUrls, val]); setCurrentEditUrl(""); }
+                          else { setNewUrls([...newUrls, val]); setCurrentNewUrl(""); }
+                        }
+                      }} className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 shadow-lg active:scale-95"><Plus className="w-4 h-4" /></button>
+                    </div>
+                    <div className="max-h-36 overflow-y-auto space-y-2 custom-scrollbar pr-1 mt-1">
+                      {(editingId ? editUrls : newUrls).map((u, i) => (
+                        <div key={i} className="flex items-center gap-3 bg-white dark:bg-white/[0.03] p-2.5 px-4 rounded-xl border border-white/5 shadow-sm group">
+                          <span className="text-[9px] font-bold text-slate-500 truncate flex-1 font-mono">{u}</span>
+                          <button onClick={() => editingId ? setEditUrls(editUrls.filter((_, idx) => idx !== i)) : setNewUrls(newUrls.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600 p-1 opacity-20 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
