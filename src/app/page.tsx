@@ -173,7 +173,7 @@ export default function Home() {
             await fetch("/api/reset-db", { method: "POST" });
           }
           const categories = ["GY", "DY", "VY", "OY", "HY"];
-          const chunksPerCategory = 4;
+          const chunksPerCategory = 10;
           const totalSteps = categories.length * chunksPerCategory;
           let currentStep = 0;
           for (const cat of categories) {
