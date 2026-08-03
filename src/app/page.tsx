@@ -82,6 +82,7 @@ export default function Home() {
   const [syncEtaSeconds, setSyncEtaSeconds] = useState<number | null>(null);
   const syncCancelRef = useRef(false);
   const [isCancellingSync, setIsCancellingSync] = useState(false);
+  const syncClientIdRef = useRef(Math.random().toString(36).slice(2, 10));
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -168,6 +169,21 @@ export default function Home() {
       type: isFullReset ? 'danger' : 'default',
       onConfirm: async () => {
         setConfirmDialog(p => ({ ...p, open: false }));
+
+        // 다른 사용자가 이미 동기화 중이면 서버 측 잠금을 획득하지 못해 여기서 막힌다.
+        const { data: lockAcquired, error: lockError } = await supabase.rpc('acquire_sync_lock', {
+          p_locked_by: syncClientIdRef.current,
+          p_stale_seconds: 900
+        });
+        if (lockError) {
+          alert(`동기화 잠금 확인 중 오류가 발생했습니다: ${lockError.message}`);
+          return;
+        }
+        if (!lockAcquired) {
+          alert("다른 사용자가 이미 동기화를 진행 중입니다. 완료된 후 다시 시도해주세요.");
+          return;
+        }
+
         setIsSyncing(true);
         setIsCancellingSync(false);
         syncCancelRef.current = false;
@@ -242,6 +258,7 @@ export default function Home() {
           console.error('[handleSync] 동기화 중 에러 발생:', e);
           alert(`동기화 중 오류가 발생했습니다: ${e.message}`);
         } finally {
+          await supabase.rpc('release_sync_lock');
           setTimeout(() => {
             setIsSyncing(false);
             setSyncProgress(0);
