@@ -338,6 +338,13 @@ export default function Home() {
     return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(date));
   };
 
+  const formatEta = (totalSeconds: number) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes <= 0) return `${seconds}초`;
+    return `${minutes}분 ${seconds}초`;
+  };
+
   const handleSort = (type: "num" | "date" | "category") => {
     if (sortBy === type) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     else { setSortBy(type); setSortOrder(type === "date" ? "desc" : "asc"); }
@@ -372,7 +379,7 @@ export default function Home() {
             <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase">
               <span>진행 {syncProgress}%</span>
               <span>수집 {syncTotalFound.toLocaleString()}개</span>
-              <span>{syncEtaSeconds === null ? "예상 시간 계산 중" : syncEtaSeconds <= 0 ? "곧 완료" : `약 ${syncEtaSeconds}초 남음`}</span>
+              <span>{syncEtaSeconds === null ? "예상 시간 계산 중" : syncEtaSeconds <= 0 ? "곧 완료" : `약 ${formatEta(syncEtaSeconds)} 남음`}</span>
             </div>
           </div>
         </div>
