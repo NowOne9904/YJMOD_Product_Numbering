@@ -296,8 +296,8 @@ export default function Home() {
             }))
           );
 
-          // 첫 응답에서 받은 세션 쿠키를 이후 작업들이 재사용해 핸드셰이크 왕복을 없앤다.
-          let sharedCookies = "";
+          // 카테고리별로 세션 쿠키를 각각 캐싱한다 (카테고리를 섞어서 재사용하면 검색 세션이 깨져 결과가 비어버린다).
+          const sharedCookiesByCategory: Record<string, string> = {};
           const CONCURRENCY = 5;
           let jobIndex = 0;
 
@@ -309,14 +309,14 @@ export default function Home() {
                 const res = await fetch("/api/sync-search", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ category: job.cat, pageStart: job.pageStart, pageCount: job.pageCount, cookies: sharedCookies })
+                  body: JSON.stringify({ category: job.cat, pageStart: job.pageStart, pageCount: job.pageCount, cookies: sharedCookiesByCategory[job.cat] || "" })
                 });
                 if (res.ok) {
                   const result = await res.json();
                   if (result.success) {
                     totalFoundLocal += (result.count || 0);
                     setSyncTotalFound(prev => prev + (result.count || 0));
-                    if (!sharedCookies && result.cookies) sharedCookies = result.cookies;
+                    if (!sharedCookiesByCategory[job.cat] && result.cookies) sharedCookiesByCategory[job.cat] = result.cookies;
                   }
                 }
               } catch (e) { }
