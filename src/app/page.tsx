@@ -298,7 +298,9 @@ export default function Home() {
 
           // 카테고리별로 세션 쿠키를 각각 캐싱한다 (카테고리를 섞어서 재사용하면 검색 세션이 깨져 결과가 비어버린다).
           const sharedCookiesByCategory: Record<string, string> = {};
-          const CONCURRENCY = 5;
+          // 동시 요청 여러 개를 자사몰에 같이 보내면 서버/함수가 타임아웃(502)나며 대부분의 요청이 통째로 실패한다.
+          // 안정성을 위해 청크 요청 자체는 순차 처리한다 (요청 내부의 페이지 5개 병렬 수집은 안전하게 유지).
+          const CONCURRENCY = 1;
           let jobIndex = 0;
 
           const worker = async () => {
