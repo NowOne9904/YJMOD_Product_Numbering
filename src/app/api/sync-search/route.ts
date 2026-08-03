@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: Request) {
     try {
-        const { category, pageStart, pageCount } = await req.json();
+        const { category, pageStart, pageCount, cookies: providedCookies } = await req.json();
 
         if (!category) {
             return NextResponse.json({ success: false, error: '카테고리가 정의되지 않았습니다.' }, { status: 400 });
@@ -17,11 +17,15 @@ export async function POST(req: Request) {
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         const supabaseClient = createClient(supabaseUrl, serviceKey || supabaseAnonKey);
 
-        const init = await fetch(`https://www.youngjaecomputer.com/shop/search.php?search_text=${category}`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36' }
-        });
-        const cookieArray = init.headers.getSetCookie() || [];
-        const cookies = cookieArray.map(c => c.split(';')[0]).join('; ');
+        // 세션 쿠키가 이미 있으면 핸드셰이크 요청을 건너뛰어 왕복을 줄인다.
+        let cookies: string = providedCookies || '';
+        if (!cookies) {
+            const init = await fetch(`https://www.youngjaecomputer.com/shop/search.php?search_text=${category}`, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36' }
+            });
+            const cookieArray = init.headers.getSetCookie() || [];
+            cookies = cookieArray.map(c => c.split(';')[0]).join('; ');
+        }
 
         const foundItems: any[] = [];
 
@@ -137,7 +141,8 @@ export async function POST(req: Request) {
         return NextResponse.json({
             success: true,
             count: foundItems.length,
-            items: foundItems.map(i => i.full_code)
+            items: foundItems.map(i => i.full_code),
+            cookies
         });
 
     } catch (error: any) {

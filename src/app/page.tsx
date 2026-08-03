@@ -176,22 +176,45 @@ export default function Home() {
           const chunksPerCategory = 10;
           const totalSteps = categories.length * chunksPerCategory;
           let currentStep = 0;
-          for (const cat of categories) {
-            setSyncStatusText(`${cat} 자료 대조 중...`);
-            for (let chunk = 0; chunk < chunksPerCategory; chunk++) {
-              const res = await fetch("/api/sync-search", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ category: cat, pageStart: (chunk * 5) + 1, pageCount: 5 })
-              });
-              if (res.ok) {
-                const result = await res.json();
-                if (result.success) setSyncTotalFound(prev => prev + (result.count || 0));
-              }
+
+          // 카테고리 x 청크 조합을 작업 목록으로 미리 펼쳐서, 순차 대기 없이 동시에 처리한다.
+          const jobs = categories.flatMap(cat =>
+            Array.from({ length: chunksPerCategory }, (_, chunk) => ({
+              cat,
+              pageStart: (chunk * 5) + 1,
+              pageCount: 5
+            }))
+          );
+
+          // 첫 응답에서 받은 세션 쿠키를 이후 작업들이 재사용해 핸드셰이크 왕복을 없앤다.
+          let sharedCookies = "";
+          const CONCURRENCY = 5;
+          let jobIndex = 0;
+
+          const worker = async () => {
+            while (jobIndex < jobs.length) {
+              const job = jobs[jobIndex++];
+              setSyncStatusText(`${job.cat} 자료 대조 중...`);
+              try {
+                const res = await fetch("/api/sync-search", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ category: job.cat, pageStart: job.pageStart, pageCount: job.pageCount, cookies: sharedCookies })
+                });
+                if (res.ok) {
+                  const result = await res.json();
+                  if (result.success) {
+                    setSyncTotalFound(prev => prev + (result.count || 0));
+                    if (!sharedCookies && result.cookies) sharedCookies = result.cookies;
+                  }
+                }
+              } catch (e) { }
               currentStep++;
               setSyncProgress(Math.round((currentStep / totalSteps) * 100));
             }
-          }
+          };
+
+          await Promise.all(Array.from({ length: CONCURRENCY }, worker));
           await fetchProducts();
           setSyncStatusText("데이터 갱신 중...");
           setSyncProgress(100);
